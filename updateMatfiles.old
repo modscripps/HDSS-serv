@@ -1,0 +1,60 @@
+function sonar = updateMatfiles(sequencesToAvg, daysBackToUpdate)
+
+if nargin < 1, sequencesToAvg  = 30; end;
+if nargin < 2, daysBackToUpdate = 3; end;	% Set a limit on how far back to update
+
+avgTimeMins	= round(sequencesToAvg/30);
+avgTimeDays = sequencesToAvg/2/86400;
+
+sonarsToUpdate	= {'50', '140'}
+% sonarsToUpdate	= {'140'}
+updateTime = now;
+
+%%	
+for si = 1:length(sonarsToUpdate)
+	sonarType = sonarsToUpdate{si};
+%%	
+	dataVolume		= '/Volumes/hdssServer_Ext';
+% 	dataVolume		= '/Volumes/O2/hdssServer_Ext';
+	
+	covDirectory	= sprintf('%s/%sk/Covariance', dataVolume, sonarType);
+
+	matDirectory	= sprintf('%s/%sk/Matfiles', dataVolume, sonarType);
+	if ~isdir(matDirectory), mkdir(matDirectory); end
+
+%%
+	today		= datenum(datestr(updateTime,1));
+
+	for theDatenum = today:-1:today-daysBackToUpdate
+		theMatFile = sprintf('%s/%sk_%s_%dm.mat', ...
+							matDirectory, sonarType, datestr(theDatenum, 29), avgTimeMins)
+		if exist(theMatFile, 'file')
+			display(['Loading file ' theMatFile]);
+			load(theMatFile);
+		end
+		if exist('sonar') & isstruct(sonar)
+			lastAvg = find(~isnan(sonar.TDS.time_mark),1,'last');
+			if (sonar.datenum(lastAvg) >= theDatenum+1-.5*avgTimeDays)
+				% The file is up to date, do nothing by passing an empty struct
+				sonar = [];
+			else
+				display(['Creating file ' theMatFile]);
+				if theDatenum == today
+					sonar = AverageCovFiles(covDirectory, sequencesToAvg, theDatenum, now, sonar);
+				else
+					sonar = AverageCovFiles(covDirectory, sequencesToAvg, theDatenum, theDatenum+1, sonar);
+				end
+			end
+		else
+			% Either there was no previous file or the file did not contain a valid sonar struct
+			sonar = AverageCovFiles(covDirectory, sequencesToAvg, theDatenum, theDatenum+1);
+        end 
+
+		if ~isempty(sonar)
+			sonar = ProcessCov(sonar)
+			display(['Saving to ' theMatFile]);
+			save(theMatFile, 'sonar');
+		end
+	end
+%%
+end

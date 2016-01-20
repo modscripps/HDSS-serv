@@ -1,0 +1,1 @@
+*/6 * * * *     /Users/opg/hdss/hdss-serv_script.sh >> /Users/opg/hdss/serverUpdate.log 2>&1

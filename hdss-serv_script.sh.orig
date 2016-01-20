@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+mutex=~/.hdss-sync
+function RmMutex () {
+    rm -f $mutex
+    exit 0
+}
+
+trap RmMutex SIGHUP SIGINT SIGQUIT SIGPIPE SIGTERM
+if [ ! -e $mutex ]; then
+    touch $mutex
+else
+    echo "already in progress, exiting."
+    exit 0
+fi
+
+# Local variables
+sshkey='/Users/opg/.ssh/hdss-serv_transfer_key'	
+date
+# Determine which valid files need to be synced to the local drive
+for freq in 50 140
+do
+    # Find all valid covariance files
+    findFiles=\
+`/usr/bin/ssh -i $sshkey hdss-${freq}khz \
+'find /Volumes/*Data_Copy1 -not -path "*/Old/*" -name "*.hdss_cov" -size +200'`
+	
+    # For each cov file, call an rsync
+    for theFile in $findFiles
+    do
+	/usr/bin/rsync -ave \
+	'ssh -axc blowfish -i /Users/opg/.ssh/hdss-serv_transfer_key' \
+	--bwlimit=6400 hdss-${freq}khz:${theFile} \
+	/Volumes/hdssServer_Ext/${freq}k/Covariance
+    done
+
+done
+
+# Launch Matlab.
+/Users/opg/hdss/hdss-serv_domatlab.sh >> /Users/opg/hdss/serverMatlab.log &
+  
+# Clean up temp file and mutex
+/bin/rm -f $mutex
